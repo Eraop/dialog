@@ -1,6 +1,6 @@
 {
   "name": "@bndynet/dialog",
-  "version": "2.1.0",
+  "version": "2.7.0",
   "description": "An interactive dialog for browser includes alert, confirm and notifications",
   "main": "dist/dialog.umd.js",
   "module": "dist/dialog.es5.js",
@@ -51,6 +51,7 @@
     "@babel/core": "^7.2.2",
     "@bndynet/typedoc-default-themes": "^0.5.1",
     "@commitlint/cli": "^7.1.2",
+    "@semantic-release/changelog": "^3.0.2",
     "@semantic-release/git": "^7.0.8",
     "@types/jest": "^23.3.12",
     "@types/node": "^10.11.0",

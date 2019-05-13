@@ -1,10 +1,14 @@
 import { defaultOptions } from './DialogOptions';
 
+/**
+ * The Modal component for building alert and confirm dialog.
+ */
 export class Modal {
     private static containerRef: HTMLElement | null = null;
 
     public finalOptions: ModalOptions;
     private ref: HTMLElement | undefined;
+    private closeListeners: Array<(sender: Modal) => void> = [];
 
     constructor(options?: ModalOptions) {
         this.finalOptions = {
@@ -15,17 +19,29 @@ export class Modal {
         };
     }
 
+    /**
+     * Renders a [[Modal]] instance with options.
+     * @param options The modal options, see the [[ModalOptions]] interface
+     */
     public render = (options?: ModalOptions) => {
         this.finalOptions = {...this.finalOptions, ...options};
-        this.ref = this.renderElement();
         if (!Modal.containerRef) {
             Modal.containerRef = this.renderOverlay();
             document.body.appendChild(Modal.containerRef);
         }
-        Modal.containerRef.appendChild(this.ref);
+        this.renderElement();
+
     };
 
+    /**
+     * Closes the [[Modal]] instance.
+     *
+     * @param event The close event
+     */
     public close = (event?: any) => {
+        this.closeListeners.forEach((listener: (sender: Modal) => void) => {
+            listener(this);
+        });
         if (typeof this.finalOptions.onClosing === "function") {
             if (this.finalOptions.onClosing(event)) {
                 this.removeElement();
@@ -41,6 +57,10 @@ export class Modal {
         }
     };
 
+    public addCloseListener(fn: (sender: Modal) => void) {
+        this.closeListeners.push(fn);
+    }
+
     private removeElement = () => {
         if (Modal.containerRef && Modal.containerRef.querySelectorAll(".bn-modal").length <= 1) {
             Modal.containerRef.remove();
@@ -55,20 +75,26 @@ export class Modal {
     private renderOverlay = (): HTMLElement => {
         const ele = document.createElement("div");
         ele.setAttribute("class", "bn-modal-overlay");
-        return document.body.appendChild(ele);
+        document.body.appendChild(ele);
+        return ele;
     };
 
     private renderElement = (): HTMLElement => {
         const options = this.finalOptions;
         const eleRoot = document.createElement("div");
         eleRoot.setAttribute("class", `bn-modal ${options.animate ? "animated" : ""} ${options.css || ""} ${options.theme || ""}`.trim());
+        this.ref = eleRoot;
+        if (Modal.containerRef) {
+            Modal.containerRef.appendChild(this.ref);
+        }
 
         if (options.width) {
             eleRoot.style.width = options.width.toString();
         }
 
-        let eleHeader: HTMLElement | null = null;
+        let headerHeight = 0;
         if (options.title) {
+            let eleHeader: HTMLElement | null = null;
             eleHeader = document.createElement("div");
             eleHeader.setAttribute("class", "bn-modal-header");
             eleRoot.appendChild(eleHeader);
@@ -83,31 +109,52 @@ export class Modal {
             eleHeaderToolboxClose.setAttribute("aria-label", "Close");
             eleHeaderToolboxClose.innerHTML = "&times;";
             eleHeaderToolboxClose.addEventListener("click", event => {
-                this.removeElement();
+                this.close();
             });
             eleHeaderToolbox.appendChild(eleHeaderToolboxClose);
             eleHeader.appendChild(eleHeaderToolbox);
+
+            headerHeight = eleHeader.clientHeight;
         }
 
-        const eleBody = document.createElement("div");
-        eleBody.setAttribute("class", "bn-modal-body");
-        eleBody.innerHTML = options.content || "";
+        // check whether the content is URI
+        // maybe browsers disable access local resoruces, like Chrome, Firefox
+        let eleBody;
+        if (options.content) {
+            if (options.content.startsWith("URI:")) {
+                options.content = options.content.replace("URI:", "");
+                eleBody = document.createElement("iframe");
+                eleBody.setAttribute("src", options.content);
+                eleBody.setAttribute("class", "bn-modal-body");
+            } else if (options.content.startsWith("#")) {
+                eleBody = document.createElement("div");
+                const elem = document.getElementById(options.content.replace("#", ""));
+                if (elem) {
+                    elem.style.display = "block";
+                    eleBody.appendChild(elem);
+                }
+                eleBody.setAttribute("class", "bn-modal-body");
+            }
+        }
+        if (!eleBody) {
+            eleBody = document.createElement("div");
+            eleBody.setAttribute("class", "bn-modal-body");
+            eleBody.innerHTML = options.content || "";
+        }
         eleRoot.appendChild(eleBody);
 
-        const eleFooter = this.renderFooter(options);
-        eleRoot.appendChild(eleFooter);
+        let footerHeight = 0;
+        if ((options.buttons && options.buttons.length > 0) || options.tip) {
+            const eleFooter = this.renderFooter(options);
+            eleRoot.appendChild(eleFooter);
+            footerHeight = eleFooter.clientHeight;
+        }
 
         let height: number | string | null = null;
         if (options.height && typeof options.height === "number") {
-            height = options.height;
-            if (eleHeader) {
-                height = height - eleHeader.clientHeight;
-            }
-            if (eleFooter) {
-                height = height - eleFooter.clientHeight;
-            }
+            height = options.height - headerHeight - footerHeight;
         } else if (typeof options.height === "string") {
-            height = `calc(100vh - ${eleHeader ? eleHeader.clientHeight : 0}px - ${eleFooter ? eleFooter.clientHeight : 0}px)`;
+            height = `calc(${options.height} - ${headerHeight}px - ${footerHeight}px)`;
         }
         if (height) {
             eleBody.style.height = height.toString();
@@ -162,6 +209,7 @@ export class Modal {
     };
 }
 
+/** The options for [[Modal]] */
 export interface ModalOptions {
     animate?: boolean;
     theme?: string;
@@ -172,12 +220,17 @@ export interface ModalOptions {
     width?: number | string;
     height?: number | string;
     buttons?: ModalButton[];
+    /**
+     * The event listener will be called before closing.
+     * @returns true to continue, otherwise break close event.
+     */
     onClosing?: (event: any) => boolean;
     onClosed?: (event: any) => void;
     labelOK?: string;
     labelCancel?: string;
 }
 
+/** The button definition for [[Modal]] buttons */
 export interface ModalButton {
     label: string;
     style?: string;
@@ -185,14 +238,30 @@ export interface ModalButton {
     onClick?: (Modal: Modal) => void;
 }
 
+/**
+ * Shows an alert dialog.
+ * @param message The alert message
+ * @param callback The callback function when you click ok button
+ */
 export function alert(message: string, callback?: () => void): Modal;
+
+/**
+ * Shows an alert dialog.
+ * @param title The alert dialog title
+ * @param message The alert dialog message
+ * @param callback The callback function when you click ok button
+ */
 export function alert(title: string, message: string, callback?: () => void): Modal;
 
+/**
+ * Shows an alert dialog according to the specified arguments.
+ */
 export function alert(): Modal {
     const args = arguments;
     const modal = new Modal();
     const modalOptions = modal.finalOptions;
     const options: ModalOptions = {};
+    options.theme = "theme-alert";
     options.buttons = [
         {
             label: modalOptions.labelOK as string,
@@ -228,15 +297,38 @@ export function alert(): Modal {
     return modal;
 }
 
+/**
+ * Shows a confirm dialog.
+ * @param options The modal options, see [[ModalOptions]] interface
+ * @returns A [[Modal]] instance
+ */
 export function confirm(options: ModalOptions): Modal;
+/**
+ * Shows a confirm dialog.
+ * @param message The confirm message
+ * @param callback The callback function when click ok button
+ * @returns A [[Modal]] instance
+ */
 export function confirm(message: string, callback: () => void): Modal;
+/**
+ * Shows a confirm dialog.
+ * @param title The confirm title
+ * @param message The confirm message
+ * @param callback The callback function when click ok button
+ * @returns A [[Modal]] instance
+ */
 export function confirm(title: string, message: string, callback: () => void): Modal;
 
+/**
+ * Shows an confirm dialog according to the specified arguments.
+ */
 export function confirm(): Modal {
     const args = arguments;
     const modal = new Modal();
     const modalOptions = modal.finalOptions;
-    const options: ModalOptions = {};
+    const options: ModalOptions = {
+        theme: "theme-confirm",
+    };
     options.buttons = [
         {
             label: modalOptions.labelCancel as string,
@@ -271,5 +363,50 @@ export function confirm(): Modal {
     if (options) {
         modal.render(options);
     }
+    return modal;
+}
+
+/**
+ * Opens a window with iframe element for opening the specified uri.
+ * @param uri The uri to open
+ * @param title The window title. If empty, show the url
+ * @param options The [[ModalOptions]] like {width: '80%', height: '80%'}
+ */
+export function iframe(uri: string, title: string, options?: ModalOptions) : Modal {
+    options = {
+        content: `URI:${uri}`,
+        theme: "theme-iframe",
+        title: title || uri,
+        ...options,
+    };
+    const modal = new Modal(options);
+    modal.render();
+    return modal;
+}
+
+/**
+ * Opens a modal dialog and appends the ID element.
+ * @param id The element ID
+ * @param title The dialog title
+ * @param options The [[ModalOptions]] like {width: 800, height: 600}
+ */
+export function element(id: string, title: string, options?: ModalOptions) : Modal {
+    const eleSelector = id.startsWith("#") ? id : '#' + id;
+    options = {
+        content: eleSelector,
+        title: title || " ",
+        theme: "theme-element",
+        ...options,
+    };
+    const modal = new Modal(options);
+    modal.addCloseListener(() => {
+        const ele = document.querySelector(eleSelector) as HTMLElement;
+        if (ele) {
+            ele.style.display = 'none';
+            document.body.appendChild(ele);
+        }
+        return true;
+    });
+    modal.render();
     return modal;
 }

@@ -1,5 +1,6 @@
 import { defaultOptions } from './DialogOptions';
 
+/** The options for [[Notification]] */
 export interface NotificationOptions {
     autoClose?: boolean;
     clickClose?: boolean;
@@ -8,15 +9,19 @@ export interface NotificationOptions {
     placement?: string;
     maxItems?: number;
     square?: boolean;
+    message: string;
 }
 
-class Notification {
+/**
+ * The notification component for popping up notifications.
+ */
+export class Notification {
     private static refContainer: HTMLElement;
 
     private ref?: HTMLElement;
     private finalOptions: NotificationOptions;
 
-    constructor(options?: NotificationOptions) {
+    constructor(options: NotificationOptions) {
         this.finalOptions = {
             autoClose: defaultOptions.notificationAutoClose,
             clickClose: defaultOptions.notificationClickClose,
@@ -29,7 +34,10 @@ class Notification {
         };
     }
 
-    public show = (message: string) => {
+    /**
+     * Shows a notification
+     */
+    public show = () => {
         if (Notification.refContainer) {
             const itemCount  = Notification.refContainer.querySelectorAll(".notification-item").length;
             if ( itemCount>= this.finalOptions.maxItems!) {
@@ -40,9 +48,13 @@ class Notification {
                 });
             }
         }
-        return this.renderItem(message);
+        return this.renderItem(this.finalOptions.message);
     }
 
+    /**
+     * Closes the notification
+     * @param item The notification item typed [[HTMLElement]]
+     */
     public close = (item?: HTMLElement) => {
         if (item) {
             const css = item.getAttribute("class")!.replace("notification-item-show", "notification-item-hidden");
@@ -86,10 +98,20 @@ class Notification {
     }
 }
 
-export function notify(message: string, theme?: string) {
-    const notification = new Notification({
-        theme: theme || "default",
-        autoClose: true,
-    });
-    notification.show(message);
+/**
+ * Shows a notification with options.
+ * @param messageOrOptions The notification message or [[NotificationOptions]]
+ * @param theme The notification theme, can be `success`, `warning`, `error` and `default`
+ */
+export function notify(messageOrOptions: string | NotificationOptions, theme?: string) {
+    if (typeof messageOrOptions === "object") {
+        new Notification(messageOrOptions).show();
+    } else {
+        const notification = new Notification({
+            theme: theme || "default",
+            autoClose: true,
+            message: messageOrOptions,
+        });
+        notification.show();
+    }
 }
